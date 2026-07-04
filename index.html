@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AMC 語彙・病態 復習</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2563eb">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- サインイン画面 -->
+  <section id="view-login" class="view">
+    <div class="login-box">
+      <h1>AMC 語彙・病態 復習</h1>
+      <p class="muted">Googleアカウントでサインインすると、Mac・iPad・iPhoneの間でカードが自動的に同期されます。</p>
+      <button id="btn-signin" class="btn btn-primary">Googleでサインイン</button>
+      <p id="login-status" class="muted small"></p>
+    </div>
+  </section>
+
+  <!-- メインアプリ -->
+  <section id="view-app" class="view hidden">
+
+    <header class="topbar">
+      <div class="deck-tabs">
+        <button class="deck-tab active" data-deck="vocab">語彙</button>
+        <button class="deck-tab" data-deck="pathology">病態</button>
+      </div>
+      <button id="btn-signout" class="btn-link">サインアウト</button>
+    </header>
+
+    <main id="main-content">
+
+      <!-- ホーム -->
+      <div id="pane-home" class="pane">
+        <div class="due-card">
+          <div class="due-number" id="due-count">0</div>
+          <div class="due-label">件の復習が期限です</div>
+          <button id="btn-start-review" class="btn btn-primary btn-large">復習を開始</button>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><span id="stat-total">0</span><label>総カード数</label></div>
+          <div class="stat"><span id="stat-new">0</span><label>未学習</label></div>
+        </div>
+      </div>
+
+      <!-- カード追加 -->
+      <div id="pane-add" class="pane hidden">
+        <h2 id="add-heading">語彙カードを追加</h2>
+        <form id="form-add">
+          <label id="label-front">英単語・フレーズ</label>
+          <input type="text" id="input-front" required placeholder="例: seminal vesiculitis">
+
+          <label id="label-example" class="vocab-only">例文・文脈</label>
+          <input type="text" id="input-example" class="vocab-only" placeholder="例: Pain on ejaculation suggests seminal vesiculitis.">
+
+          <label id="label-back">意味・メモ</label>
+          <textarea id="input-back" required rows="5" placeholder="例: 精嚢炎。前立腺炎と合併しやすい。"></textarea>
+
+          <label>タグ（カンマ区切り・任意）</label>
+          <input type="text" id="input-tags" placeholder="例: urology, infection">
+
+          <button type="submit" class="btn btn-primary">カードを保存</button>
+        </form>
+      </div>
+
+      <!-- 復習セッション -->
+      <div id="pane-review" class="pane hidden">
+        <div id="review-empty" class="empty-state hidden">
+          <p>このデッキに復習期限のカードはありません。</p>
+          <button class="btn" id="btn-review-back">ホームに戻る</button>
+        </div>
+        <div id="review-card-area" class="hidden">
+          <div class="review-progress"><span id="review-progress-text"></span></div>
+          <div class="flashcard" id="flashcard">
+            <div class="flashcard-front" id="card-front"></div>
+            <div class="flashcard-example" id="card-example"></div>
+            <div class="flashcard-back hidden" id="card-back"></div>
+          </div>
+          <button id="btn-reveal" class="btn btn-primary btn-large">答えを見る</button>
+          <div id="grade-buttons" class="grade-buttons hidden">
+            <button class="btn btn-grade btn-hard" data-grade="hard">難しい</button>
+            <button class="btn btn-grade btn-good" data-grade="good">普通</button>
+            <button class="btn btn-grade btn-easy" data-grade="easy">簡単</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 一覧 -->
+      <div id="pane-browse" class="pane hidden">
+        <div class="browse-toolbar">
+          <input type="text" id="browse-search" placeholder="検索...">
+          <div class="browse-actions">
+            <button id="btn-export" class="btn-link">エクスポート</button>
+            <label class="btn-link file-label">インポート<input type="file" id="input-import" accept="application/json" hidden></label>
+          </div>
+        </div>
+        <ul id="browse-list" class="browse-list"></ul>
+      </div>
+
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-pane="home">ホーム</button>
+      <button class="nav-btn" data-pane="add">追加</button>
+      <button class="nav-btn" data-pane="review">復習</button>
+      <button class="nav-btn" data-pane="browse">一覧</button>
+    </nav>
+
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
