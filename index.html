@@ -67,6 +67,10 @@
           <label>タグ（カンマ区切り・任意）</label>
           <input type="text" id="input-tags" placeholder="例: urology, infection">
 
+          <label>画像（任意・スクリーンショットなど）</label>
+          <input type="file" id="input-image" accept="image/*">
+          <img id="image-preview" class="hidden">
+
           <button type="submit" class="btn btn-primary">カードを保存</button>
         </form>
       </div>
@@ -82,6 +86,7 @@
           <div class="flashcard" id="flashcard">
             <div class="flashcard-front" id="card-front"></div>
             <div class="flashcard-example" id="card-example"></div>
+            <img class="flashcard-image hidden" id="card-image">
             <div class="flashcard-back hidden" id="card-back"></div>
           </div>
           <button id="btn-reveal" class="btn btn-primary btn-large">答えを見る</button>
