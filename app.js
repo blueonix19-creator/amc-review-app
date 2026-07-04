@@ -1,7 +1,7 @@
 import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  getAuth, GoogleAuthProvider, signInWithPopup,
   onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -66,11 +66,12 @@ function showToast(msg) {
 
 // --- 認証 ---
 $("btn-signin").addEventListener("click", () => {
-  signInWithRedirect(auth, new GoogleAuthProvider());
+  signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => {
+    console.error(e);
+    showToast("サインインに失敗しました");
+  });
 });
 $("btn-signout").addEventListener("click", () => signOut(auth));
-
-getRedirectResult(auth).catch((e) => console.error(e));
 
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
