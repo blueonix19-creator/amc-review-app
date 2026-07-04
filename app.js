@@ -139,6 +139,49 @@ async function deleteCard(cardId) {
   await loadDeck(currentDeck);
 }
 
+// --- 画像（圧縮してFirestoreに直接保存） ---
+let pendingImage = null;
+
+function fileToResizedBase64(file, maxDim = 1000, quality = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+          else { width = Math.round((width * maxDim) / height); height = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+$("input-image").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingImage = await fileToResizedBase64(file);
+  if (pendingImage.length > 900000) {
+    showToast("画像が大きすぎます。別の画像を選んでください");
+    pendingImage = null;
+    e.target.value = "";
+    $("image-preview").classList.add("hidden");
+    return;
+  }
+  $("image-preview").src = pendingImage;
+  $("image-preview").classList.remove("hidden");
+});
+
 // --- カード追加フォーム ---
 $("form-add").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -148,8 +191,10 @@ $("form-add").addEventListener("submit", async (e) => {
   const tags = $("input-tags").value.split(",").map((t) => t.trim()).filter(Boolean);
   if (!front || !back) return;
 
-  await saveCard({ front, back, example, tags });
+  await saveCard({ front, back, example, tags, ...(pendingImage ? { image: pendingImage } : {}) });
   $("form-add").reset();
+  pendingImage = null;
+  $("image-preview").classList.add("hidden");
   showToast("カードを保存しました");
   switchPane("home");
 });
@@ -191,6 +236,12 @@ function showReviewCard() {
   $("review-progress-text").textContent = `${reviewIndex + 1} / ${reviewQueue.length}`;
   $("card-front").textContent = card.front;
   $("card-example").textContent = card.example || "";
+  if (card.image) {
+    $("card-image").src = card.image;
+    $("card-image").classList.remove("hidden");
+  } else {
+    $("card-image").classList.add("hidden");
+  }
   $("card-back").textContent = card.back;
   $("card-back").classList.add("hidden");
   $("btn-reveal").classList.remove("hidden");
@@ -230,12 +281,18 @@ function renderBrowse() {
       li.className = "browse-item";
       li.innerHTML = `
         <div class="browse-item-front"></div>
+        <img class="browse-item-thumb hidden">
         <div class="browse-item-back"></div>
         <div class="browse-item-meta">
           <span class="browse-item-due"></span>
           <span class="browse-item-actions"><button data-act="delete">削除</button></span>
         </div>`;
       li.querySelector(".browse-item-front").textContent = c.front;
+      if (c.image) {
+        const thumb = li.querySelector(".browse-item-thumb");
+        thumb.src = c.image;
+        thumb.classList.remove("hidden");
+      }
       li.querySelector(".browse-item-back").textContent = c.back;
       li.querySelector(".browse-item-due").textContent = `次回: ${c.srs.due}`;
       li.querySelector('[data-act="delete"]').addEventListener("click", async () => {
