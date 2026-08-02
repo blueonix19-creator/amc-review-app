@@ -1,132 +1,73 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>AMC 語彙・病態 復習</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#2563eb">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+import { firebaseConfig } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, getDocs,
+  query, where, serverTimestamp, enableIndexedDbPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-<div id="app">
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+try { enableIndexedDbPersistence(db); } catch (e) { /* 複数タブ等では無効化される場合がある */ }
 
-  <!-- サインイン画面 -->
-  <section id="view-login" class="view">
-    <div class="login-box">
-      <h1>AMC 語彙・病態 復習</h1>
-      <p class="muted">Googleアカウントでサインインすると、Mac・iPad・iPhoneの間でカードが自動的に同期されます。</p>
-      <button id="btn-signin" class="btn btn-primary">Googleでサインイン</button>
-      <p id="login-status" class="muted small"></p>
-    </div>
-  </section>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+}
 
-  <!-- メインアプリ -->
-  <section id="view-app" class="view hidden">
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const addDays = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 
-    <header class="topbar">
-      <div class="deck-tabs">
-        <button class="deck-tab active" data-deck="vocab">語彙</button>
-        <button class="deck-tab" data-deck="pathology">病態</button>
-      </div>
-      <button id="btn-signout" class="btn-link">サインアウト</button>
-    </header>
+function sm2(srs, grade) {
+  let { ef, interval, repetition } = srs;
+  const quality = { hard: 2, good: 4, easy: 5 }[grade];
+  if (quality < 3) {
+    repetition = 0;
+    interval = 1;
+  } else {
+    if (repetition === 0) interval = 1;
+    else if (repetition === 1) interval = 6;
+    else interval = Math.round(interval * ef);
+    repetition += 1;
+  }
+  ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  if (ef < 1.3) ef = 1.3;
+  return { ef, interval, repetition, due: addDays(interval) };
+}
 
-    <main id="main-content">
+const DEFAULT_SRS = { ef: 2.5, interval: 0, repetition: 0, due: todayStr() };
 
-      <!-- ホーム -->
-      <div id="pane-home" class="pane">
-        <div class="due-card">
-          <div class="due-number" id="due-count">0</div>
-          <div class="due-label">件の復習が期限です</div>
-          <button id="btn-start-review" class="btn btn-primary btn-large">復習を開始</button>
-        </div>
-        <div class="stats-row">
-          <div class="stat"><span id="stat-total">0</span><label>総カード数</label></div>
-          <div class="stat"><span id="stat-new">0</span><label>未学習</label></div>
-        </div>
-      </div>
+// --- 状態 ---
+let currentUser = null;
+let currentDeck = "vocab";
+let allCards = [];          // 現在のデッキの全カード（キャッシュ）
+let reviewQueue = [];
+let reviewIndex = 0;
 
-      <!-- カード追加 -->
-      <div id="pane-add" class="pane hidden">
-        <h2 id="add-heading">語彙カードを追加</h2>
-        <form id="form-add">
-          <label id="label-front">英単語・フレーズ</label>
-          <input type="text" id="input-front" required placeholder="例: seminal vesiculitis">
+// --- DOM ---
+const $ = (id) => document.getElementById(id);
+const viewLogin = $("view-login");
+const viewApp = $("view-app");
 
-          <label id="label-example" class="vocab-only">例文・文脈</label>
-          <input type="text" id="input-example" class="vocab-only" placeholder="例: Pain on ejaculation suggests seminal vesiculitis.">
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.add("hidden"), 1800);
+}
 
-          <label id="label-back">意味・メモ</label>
-          <textarea id="input-back" required rows="5" placeholder="例: 精嚢炎。前立腺炎と合併しやすい。"></textarea>
-
-          <label>タグ（カンマ区切り・任意）</label>
-          <input type="text" id="input-tags" placeholder="例: urology, infection">
-
-          <label>画像（任意・スクリーンショットなど）</label>
-          <input type="file" id="input-image" accept="image/*">
-          <img id="image-preview" class="hidden">
-          <button type="button" id="btn-remove-image" class="btn-link hidden">画像を削除</button>
-
-          <button type="submit" id="btn-submit-card" class="btn btn-primary">カードを保存</button>
-          <button type="button" id="btn-cancel-edit" class="btn-link hidden">編集をキャンセル</button>
-        </form>
-      </div>
-
-      <!-- 復習セッション -->
-      <div id="pane-review" class="pane hidden">
-        <div id="review-empty" class="empty-state hidden">
-          <p>このデッキに復習期限のカードはありません。</p>
-          <button class="btn" id="btn-review-back">ホームに戻る</button>
-        </div>
-        <div id="review-card-area" class="hidden">
-          <div class="review-progress"><span id="review-progress-text"></span></div>
-          <div class="flashcard" id="flashcard">
-            <div class="flashcard-front" id="card-front"></div>
-            <div class="flashcard-example" id="card-example"></div>
-            <img class="flashcard-image hidden" id="card-image">
-            <div class="flashcard-back hidden" id="card-back"></div>
-          </div>
-          <button id="btn-reveal" class="btn btn-primary btn-large">答えを見る</button>
-          <div id="grade-buttons" class="grade-buttons hidden">
-            <button class="btn btn-grade btn-hard" data-grade="hard">難しい</button>
-            <button class="btn btn-grade btn-good" data-grade="good">普通</button>
-            <button class="btn btn-grade btn-easy" data-grade="easy">簡単</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 一覧 -->
-      <div id="pane-browse" class="pane hidden">
-        <div class="browse-toolbar">
-          <input type="text" id="browse-search" placeholder="検索...">
-          <div class="browse-actions">
-            <button id="btn-export" class="btn-link">エクスポート</button>
-            <label class="btn-link file-label">インポート<input type="file" id="input-import" accept="application/json" hidden></label>
-          </div>
-        </div>
-        <ul id="browse-list" class="browse-list"></ul>
-      </div>
-
-    </main>
-
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-pane="home">ホーム</button>
-      <button class="nav-btn" data-pane="add">追加</button>
-      <button class="nav-btn" data-pane="review">復習</button>
-      <button class="nav-btn" data-pane="browse">一覧</button>
-    </nav>
-
-  </section>
-
-  <div id="toast" class="toast hidden"></div>
-
-</div>
-
-<script type="module" src="app.js"></script>
-</body>
-</html>
+// --- 認証 ---
+$("btn-signin").addEventListener("click", () => {
+  signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => {
+    console.error(e);
+    showToast("サインインに失敗しました");
+  });
+});
